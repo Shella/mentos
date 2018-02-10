@@ -1,0 +1,7 @@
+[package]
+name = "mentos"
+version = "0.1.0"
+authors = ["Shella Stephens <pirateshella@gmail.com>"]
+
+[dependencies]
+thrussh = "0.19"
