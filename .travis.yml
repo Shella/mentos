@@ -11,9 +11,7 @@ matrix:
 addons:
   apt:
     packages:
-    - libsodium 
-    - openssl-sys
-    - openssl
+    - libsodium-dev
     - pkg-config
 
 script:
