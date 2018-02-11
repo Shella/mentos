@@ -115,6 +115,6 @@ fn main() {
     let config = Arc::new(config);
     let sh = Client {};
     sh.run(config, "127.0.0.1:2225");
-    
+
     std::mem::forget(t)
 }
