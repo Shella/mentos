@@ -106,6 +106,7 @@ fn main() {
         config.keys.push(thrussh_keys::key::KeyPair::generate(thrussh_keys::key::ED25519).unwrap());
         let config = Arc::new(config);
         let sh = H{};
+        println!("server running!");
         thrussh::server::run(config, "127.0.0.1:2225", sh);
     });
 
@@ -114,7 +115,38 @@ fn main() {
     config.connection_timeout = Some(std::time::Duration::from_secs(600));
     let config = Arc::new(config);
     let sh = Client {};
+    let device_config = read_toml();
+    println!("{:#?}", device_config);
     sh.run(config, "127.0.0.1:2225");
 
     std::mem::forget(t)
 }
+
+extern crate toml;
+#[macro_use]
+extern crate serde_derive;
+use std::fs::File;
+use std::io::Read;
+
+#[derive(Debug, Deserialize)]
+struct DeviceConfig {
+    hostname: Option<String>,
+    ip: Option<String>,
+    port: Option<u64>,
+    os: Option<String>,
+    user: Option<String>,
+    ssh_secretkey_path: Option<String>,
+}
+
+fn read_toml() -> DeviceConfig {
+    let conf = "/Users/shella/codez/mentos/config/Router.toml";
+    let mut f = File::open(conf).unwrap();
+    let mut contents = String::new();
+    let toml_str = f.read_to_string(&mut contents)
+        .expect("Something went wrong reading the file");
+
+    let decoded: DeviceConfig = toml::from_str(&toml_str.to_string()).unwrap();
+    return decoded;
+}
+
+
