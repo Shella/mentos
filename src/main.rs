@@ -9,6 +9,7 @@ extern crate thrussh_keys;
 extern crate tokio_core;
 extern crate toml;
 use ssh2::Session as SessionClient;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::net::SocketAddr;
@@ -95,7 +96,12 @@ fn main() {
 }
 
 #[derive(Debug, Deserialize)]
-struct DeviceConfig {
+struct Config {
+    devices: HashMap<String, RouterConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RouterConfig {
     hostname: Option<String>,
     ip: Option<String>,
     port: Option<u64>,
@@ -103,12 +109,14 @@ struct DeviceConfig {
     user: Option<String>,
 }
 
-fn read_toml() -> DeviceConfig {
+fn read_toml() -> Config {
     let conf = "/Users/shella/codez/mentos/config/Router.toml";
     let mut f = File::open(conf).unwrap();
     let mut contents = String::new();
-    let toml_str = f.read_to_string(&mut contents)
+     f.read_to_string(&mut contents)
         .expect("Something went wrong reading the file");
 
-    toml::from_str::<DeviceConfig>(&toml_str.to_string()).unwrap()
+    print!("{}", contents);
+
+    toml::from_str::<Config>(&contents.to_string()).unwrap()
 }

@@ -1,6 +1,7 @@
-[example_router]
+[devices.example_router]
 hostname = "router.corp"
 ip = "127.0.0.1"
 port = 2222
 os = "Junos OS"
 user = "shella"
+
