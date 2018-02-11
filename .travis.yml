@@ -15,7 +15,7 @@ before_install:
 
 script:
   - cat /etc/lsb-release 
-  - cargo tesst
+  - cargo test
 
 branches:
   only:
