@@ -8,6 +8,14 @@ matrix:
   allow_failures:
     - rust: nightly
 
+addons:
+  apt:
+    packages:
+    - libsodium 
+    - openssl-sys
+    - openssl
+    - pkg-config
+
 script:
   - cargo test
 
