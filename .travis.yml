@@ -8,16 +8,8 @@ matrix:
   allow_failures:
     - rust: nightly
 
-addons:
-  apt:
-    sources:
-    - deadsnakes
-    packages:
-    - libsodium-dev
-    - pkg-config
-
 script:
-  - cargo test
+  - cat /etc/lsb-release 
 
 branches:
   only:
