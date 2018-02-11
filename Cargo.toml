@@ -5,3 +5,8 @@ authors = ["Shella Stephens <pirateshella@gmail.com>"]
 
 [dependencies]
 thrussh = "0.19"
+futures = "0.1"
+thrussh-keys = "0.9"
+tokio-core = "0.1"
+env_logger = "0.5"
+ring = "0.12"
