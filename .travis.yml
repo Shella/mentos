@@ -1,0 +1,7 @@
+rust:
+- stable
+- beta
+- nightly
+
+script:
+- cargo test
