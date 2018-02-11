@@ -46,10 +46,7 @@ impl server::Handler for H {
     }
 }
 
-
 use futures::Future;
-use std::io::Read;
-
 
 struct Client { }
 
@@ -76,37 +73,32 @@ impl client::Handler for Client {
 impl Client {
 
     fn run(self, config: Arc<client::Config>, _: &str) {
-
         client::connect(
-            "127.0.0.1:2222", config, None, self,
+            "127.0.0.1:2225", config, None, self,
 
             |connection| {
+                println!("connecting...");
+                let key_location = "/Users/shella/.ssh/id_rsa";
+                let key = thrussh_keys::load_secret_key(key_location, None).unwrap();
+                let user = "shella";
 
-                let mut key_file = std::fs::File::open("~/.ssh/id_ed25519").unwrap();
-                let mut key = String::new();
-                key_file.read_to_string(&mut key).unwrap();
-                let key = load_secret_key(&key, None).unwrap();
-
-                connection.authenticate_key("shella", key)
+                connection.authenticate_key(user, key)
                     .and_then(|session| {
-
                         session.channel_open_session().and_then(|(session, channelid)| {
-
                             session.data(channelid, None, "Hello, world!").and_then(|(mut session, _)| {
                                 session.disconnect(Disconnect::ByApplication, "Ciao", "");
                                 session
-                            })
                         })
                     })
-            }).unwrap();
-
+                })
+        }).unwrap();
     }
 
 }
 
 fn main() {
     env_logger::init();
-    // Starting the server thread.
+
     let t = std::thread::spawn(|| {
         let mut config = thrussh::server::Config::default();
         config.connection_timeout = Some(std::time::Duration::from_secs(600));
@@ -114,7 +106,7 @@ fn main() {
         config.keys.push(thrussh_keys::key::KeyPair::generate(thrussh_keys::key::ED25519).unwrap());
         let config = Arc::new(config);
         let sh = H{};
-        thrussh::server::run(config, "0.0.0.0:2222", sh);
+        thrussh::server::run(config, "127.0.0.1:2225", sh);
     });
 
     std::thread::sleep(std::time::Duration::from_secs(1));
@@ -122,8 +114,7 @@ fn main() {
     config.connection_timeout = Some(std::time::Duration::from_secs(600));
     let config = Arc::new(config);
     let sh = Client {};
-    sh.run(config, "127.0.0.1:2222");
-
-    // Kill the server thread after the client has ended.
+    sh.run(config, "127.0.0.1:2225");
+    
     std::mem::forget(t)
 }
