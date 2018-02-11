@@ -1,7 +1,7 @@
 [example_router]
 hostname = "router.corp"
 ip = "127.0.0.1"
-port = "2222"
+port = 2222
 os = "Junos OS"
 user = "admin"
 ssh_secretkey_path = "~/.ssh/id_rsa"
