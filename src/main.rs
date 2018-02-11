@@ -1,4 +1,5 @@
 extern crate env_logger;
+extern crate failure;
 extern crate futures;
 extern crate ring;
 #[macro_use]
@@ -8,6 +9,7 @@ extern crate thrussh;
 extern crate thrussh_keys;
 extern crate tokio_core;
 extern crate toml;
+use failure::Error;
 use ssh2::Session as SessionClient;
 use std::collections::HashMap;
 use std::fs::File;
@@ -15,9 +17,9 @@ use std::io::Read;
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::sync::Arc;
-use thrussh::*;
+use thrussh::{ChannelId, server};
 use thrussh::server::{Auth, Session};
-use thrussh_keys::*;
+use thrussh_keys::key;
 
 #[derive(Clone)]
 struct TestServer {}
@@ -66,7 +68,7 @@ fn main() {
         let config = Arc::new(config);
         let sh = TestServer {};
         println!("Test server running!");
-        thrussh::server::run(config, "127.0.0.1:2225", sh);
+        thrussh::server::run(config, "127.0.0.1:2222", sh);
     });
 
     let sess = SessionClient::new().unwrap();
@@ -76,21 +78,23 @@ fn main() {
 
     for identity in agent.identities() {
         let identity = identity.unwrap();
-        println!("Identity: {}", identity.comment());
-        let pubkey = identity.blob();
-        println!("Key: {:?}", pubkey);
+        println!("SSH Agent Identity: {}", identity.comment());
+        let key = identity.blob();
+        println!("Key: {:?}", key);
     }
 
-    let device_config = read_toml();
-    println!("{:#?}", device_config);
-    //println!("user: {:#?}", device_config.user);
-    //let agent_user = device_config.user.unwrap();
+    let device_config = read_toml().unwrap();
+    let (_name, device) = device_config.devices.into_iter().next().unwrap();
+    println!("RouterConfig: {:#?}", device);
+    let user = device.user.unwrap();
+    let ip = device.ip.unwrap();
+    let port = device.port.unwrap();
 
-    //let tcp = TcpStream::connect(format!("{:?}:{:?}", device_config.ip, device_config.port)).unwrap();
-    //let mut sess = SessionClient::new().unwrap();
-    //sess.handshake(&tcp).unwrap();
-    //sess.userauth_agent(&agent_user).unwrap();
-    //assert!(sess.authenticated());
+    let tcp = TcpStream::connect(format!("{}:{}", ip, port)).unwrap();
+    let mut sess = SessionClient::new().unwrap();
+    sess.handshake(&tcp).unwrap();
+    sess.userauth_agent(&user).unwrap();
+    assert!(sess.authenticated());
 
     std::mem::forget(t)
 }
@@ -109,14 +113,11 @@ struct RouterConfig {
     user: Option<String>,
 }
 
-fn read_toml() -> Config {
+fn read_toml() -> Result<Config, Error> {
     let conf = "/Users/shella/codez/mentos/config/Router.toml";
     let mut f = File::open(conf).unwrap();
     let mut contents = String::new();
-     f.read_to_string(&mut contents)
-        .expect("Something went wrong reading the file");
+    f.read_to_string(&mut contents)?;
 
-    print!("{}", contents);
-
-    toml::from_str::<Config>(&contents.to_string()).unwrap()
+    Ok(toml::from_str::<Config>(&contents.to_string())?)
 }
