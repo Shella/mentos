@@ -1,29 +1,34 @@
+extern crate env_logger;
+extern crate futures;
+extern crate ring;
+#[macro_use]
+extern crate serde_derive;
+extern crate ssh2;
 extern crate thrussh;
 extern crate thrussh_keys;
-extern crate futures;
 extern crate tokio_core;
-extern crate env_logger;
-extern crate ssh2;
-extern crate ring;
+extern crate toml;
+use ssh2::Session as SessionClient;
+use std::fs::File;
+use std::io::Read;
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::sync::Arc;
 use thrussh::*;
 use thrussh::server::{Auth, Session};
 use thrussh_keys::*;
-use ssh2::Session as SessionClient;
 
 #[derive(Clone)]
-struct H{}
+struct TestServer {}
 
-impl server::Server for H {
+impl server::Server for TestServer {
     type Handler = Self;
     fn new(&self, _: SocketAddr) -> Self {
-        H{}
+        TestServer {}
     }
 }
 
-impl server::Handler for H {
+impl server::Handler for TestServer {
     type Error = ();
     type FutureAuth = futures::Finished<(Self, server::Auth), Self::Error>;
     type FutureUnit = futures::Finished<(Self, thrussh::server::Session), Self::Error>;
@@ -58,8 +63,8 @@ fn main() {
         config.auth_rejection_time = std::time::Duration::from_secs(3);
         config.keys.push(thrussh_keys::key::KeyPair::generate(thrussh_keys::key::ED25519).unwrap());
         let config = Arc::new(config);
-        let sh = H{};
-        println!("server running!");
+        let sh = TestServer {};
+        println!("Test server running!");
         thrussh::server::run(config, "127.0.0.1:2225", sh);
     });
 
@@ -70,28 +75,24 @@ fn main() {
 
     for identity in agent.identities() {
         let identity = identity.unwrap();
-        println!("{}", identity.comment());
+        println!("Identity: {}", identity.comment());
         let pubkey = identity.blob();
-        println!("{:?}", pubkey);
+        println!("Key: {:?}", pubkey);
     }
-
-    let tcp = TcpStream::connect("127.0.0.1:2225").unwrap();
-    let mut sess = SessionClient::new().unwrap();
-    sess.handshake(&tcp).unwrap();
-    sess.userauth_agent("shella").unwrap();
-    assert!(sess.authenticated());
 
     let device_config = read_toml();
     println!("{:#?}", device_config);
+    //println!("user: {:#?}", device_config.user);
+    //let agent_user = device_config.user.unwrap();
+
+    //let tcp = TcpStream::connect(format!("{:?}:{:?}", device_config.ip, device_config.port)).unwrap();
+    //let mut sess = SessionClient::new().unwrap();
+    //sess.handshake(&tcp).unwrap();
+    //sess.userauth_agent(&agent_user).unwrap();
+    //assert!(sess.authenticated());
 
     std::mem::forget(t)
 }
-
-extern crate toml;
-#[macro_use]
-extern crate serde_derive;
-use std::fs::File;
-use std::io::Read;
 
 #[derive(Debug, Deserialize)]
 struct DeviceConfig {
@@ -100,7 +101,6 @@ struct DeviceConfig {
     port: Option<u64>,
     os: Option<String>,
     user: Option<String>,
-    ssh_secretkey_path: Option<String>,
 }
 
 fn read_toml() -> DeviceConfig {
