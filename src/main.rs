@@ -1,75 +1,25 @@
 extern crate env_logger;
 extern crate failure;
-extern crate futures;
-extern crate ring;
 #[macro_use]
 extern crate serde_derive;
 extern crate ssh2;
-extern crate thrussh;
-extern crate thrussh_keys;
-extern crate tokio_core;
 extern crate toml;
 use failure::Error;
 use ssh2::Session as SessionClient;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::net::SocketAddr;
 use std::net::TcpStream;
-use std::sync::Arc;
-use thrussh::{ChannelId, server};
-use thrussh::server::{Auth, Session};
-use thrussh_keys::key;
-
-#[derive(Clone)]
-struct TestServer {}
-
-impl server::Server for TestServer {
-    type Handler = Self;
-    fn new(&self, _: SocketAddr) -> Self {
-        TestServer {}
-    }
-}
-
-impl server::Handler for TestServer {
-    type Error = ();
-    type FutureAuth = futures::Finished<(Self, server::Auth), Self::Error>;
-    type FutureUnit = futures::Finished<(Self, thrussh::server::Session), Self::Error>;
-    type FutureBool = futures::Finished<(Self, thrussh::server::Session, bool), Self::Error>;
-
-    fn finished_auth(self, auth: Auth) -> Self::FutureAuth {
-        futures::finished((self, auth))
-    }
-    fn finished_bool(self, session: Session, b: bool) -> Self::FutureBool {
-        futures::finished((self, session, b))
-    }
-    fn finished(self, session: Session) -> Self::FutureUnit {
-        futures::finished((self, session))
-    }
-
-    fn auth_publickey(self, _: &str, _: &key::PublicKey) -> Self::FutureAuth {
-        futures::finished((self, server::Auth::Accept))
-    }
-    fn data(self, channel: ChannelId, data: &[u8], mut session: thrussh::server::Session) -> Self::FutureUnit {
-        println!("data on channel {:?}: {:?}", channel, std::str::from_utf8(data));
-        session.data(channel, None, data);
-        futures::finished((self, session))
-    }
-}
 
 fn main() {
     env_logger::init();
 
-    let t = std::thread::spawn(|| {
-        let mut config = thrussh::server::Config::default();
-        config.connection_timeout = Some(std::time::Duration::from_secs(600));
-        config.auth_rejection_time = std::time::Duration::from_secs(3);
-        config.keys.push(thrussh_keys::key::KeyPair::generate(thrussh_keys::key::ED25519).unwrap());
-        let config = Arc::new(config);
-        let sh = TestServer {};
-        println!("Test server running!");
-        thrussh::server::run(config, "127.0.0.1:2222", sh);
-    });
+    let device_config = read_toml().unwrap();
+    let (_name, device) = device_config.devices.into_iter().next().unwrap();
+    println!("RouterConfig: {:#?}", device);
+    let ip = device.ip.unwrap();
+    let port = device.port.unwrap();
+    let user = device.user.unwrap();
 
     let sess = SessionClient::new().unwrap();
     let mut agent = sess.agent().unwrap();
@@ -79,24 +29,27 @@ fn main() {
     for identity in agent.identities() {
         let identity = identity.unwrap();
         println!("SSH Agent Identity: {}", identity.comment());
-        let key = identity.blob();
-        println!("Key: {:?}", key);
+        let pubkey = identity.blob();
+        println!("Key: {:?}", pubkey);
     }
 
-    let device_config = read_toml().unwrap();
-    let (_name, device) = device_config.devices.into_iter().next().unwrap();
-    println!("RouterConfig: {:#?}", device);
-    let user = device.user.unwrap();
-    let ip = device.ip.unwrap();
-    let port = device.port.unwrap();
-
-    let tcp = TcpStream::connect(format!("{}:{}", ip, port)).unwrap();
+    let server = format!("{}:{}", ip, port);
+    println!("Connecting to server {}..", server);
+    let tcp = TcpStream::connect(server).unwrap();
     let mut sess = SessionClient::new().unwrap();
     sess.handshake(&tcp).unwrap();
     sess.userauth_agent(&user).unwrap();
     assert!(sess.authenticated());
+    let banner = sess.banner().unwrap();
+    println!("Server Banner: {}", banner);
 
-    std::mem::forget(t)
+    let mut channel = sess.channel_session().unwrap();
+    channel.exec("show configuration").unwrap();
+    let mut s = String::new();
+    channel.read_to_string(&mut s).unwrap();
+    println!("{}", s);
+    channel.wait_close();
+    println!("{}", channel.exit_status().unwrap());
 }
 
 #[derive(Debug, Deserialize)]
@@ -108,7 +61,7 @@ struct Config {
 struct RouterConfig {
     hostname: Option<String>,
     ip: Option<String>,
-    port: Option<u64>,
+    port: Option<String>,
     os: Option<String>,
     user: Option<String>,
 }
