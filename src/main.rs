@@ -20,6 +20,7 @@ fn main() {
     let ip = device.ip.unwrap();
     let port = device.port.unwrap();
     let user = device.user.unwrap();
+    let os = device.os.unwrap();
 
     let sess = SessionClient::new().unwrap();
     let mut agent = sess.agent().unwrap();
@@ -43,13 +44,15 @@ fn main() {
     let banner = sess.banner().unwrap();
     println!("Server Banner: {}", banner);
 
-    let mut channel = sess.channel_session().unwrap();
-    channel.exec("show configuration").unwrap();
-    let mut s = String::new();
-    channel.read_to_string(&mut s).unwrap();
-    println!("{}", s);
-    channel.wait_close();
-    println!("{}", channel.exit_status().unwrap());
+    if os == "Junos OS" {
+        let mut channel = sess.channel_session().unwrap();
+        channel.exec("show configuration").unwrap();
+        let mut s = String::new();
+        channel.read_to_string(&mut s).unwrap();
+        println!("{}", s);
+        channel.wait_close();
+        println!("{}", channel.exit_status().unwrap());
+    }
 }
 
 #[derive(Debug, Deserialize)]
