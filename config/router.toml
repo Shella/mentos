@@ -1,7 +1,6 @@
-[example_router]
-hostname = "router.corp"
-ip = "127.0.0.1"
-port = 2222
+[devices.example_router]
+hostname = "core.corp"
+ip = "10.0.0.2"
+port = "22"
 os = "Junos OS"
-user = "admin"
-ssh_secretkey_path = "~/.ssh/id_rsa"
+user = "shella"
