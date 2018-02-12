@@ -7,6 +7,7 @@ extern crate toml;
 use failure::Error;
 use ssh2::Session;
 use std::collections::HashMap;
+use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::net::TcpStream;
@@ -83,8 +84,11 @@ struct RouterConfig {
 }
 
 fn read_toml() -> Result<Config, Error> {
-    let conf = "/Users/shella/codez/mentos/config/Router.toml";
-    let mut f = File::open(conf).unwrap();
+    let mut current_dir = env::current_dir().unwrap();
+    let dir = current_dir.into_os_string().into_string().unwrap();
+    let conf = "/config/Router.toml";
+    let conf_path = format!("{}{}", dir, conf);
+    let mut f = File::open(conf_path).unwrap();
     let mut contents = String::new();
     f.read_to_string(&mut contents)?;
 
