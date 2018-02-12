@@ -23,7 +23,7 @@ fn main() {
     let user = device.user.as_ref().unwrap();
     let server = format!("{}:{}", ip, port);
 
-    let mut session = ssh2_session();
+    let mut session = ssh2_session().expect("Unable to create new session");
     println!("Connecting to server {}..", server);
     let tcp = TcpStream::connect(server).unwrap();
     session.handshake(&tcp).unwrap();
@@ -40,7 +40,7 @@ fn main() {
     }
 }
 
-fn ssh2_session() -> ssh2::Session {
+fn ssh2_session() -> Result<ssh2::Session, Error> {
     let sess = Session::new().unwrap();
     {
         let mut agent = sess.agent().unwrap();
@@ -55,7 +55,7 @@ fn ssh2_session() -> ssh2::Session {
         }
     }
 
-    return sess;
+    Ok(sess)
 }
 
 fn junos_cmd_show_configuration(session: &Session) -> Result<ssh2::Channel, Error> {
