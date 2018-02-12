@@ -11,14 +11,27 @@ use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::net::TcpStream;
+use structopt::StructOpt;
 
 fn main() {
     env_logger::init();
 
+    let mentos = Mentos::from_args();
+    println!("{:?}", mentos);
+    match mentos {
+        Mentos::Fetch { all, .. } => fetch(all)
+    }
+}
+
+fn get_device_config() -> RouterConfig {
     let device_config = read_toml().unwrap();
     let (_name, device) = device_config.devices.into_iter().next().unwrap();
-    println!("RouterConfig: {:#?}", device);
+    //println!("RouterConfig: {:#?}", device);
+    device
+}
 
+fn fetch(all: bool) {
+    let device = get_device_config();
     let ip = device.ip.as_ref().unwrap();
     let port = device.port.as_ref().unwrap();
     let user = device.user.as_ref().unwrap();
@@ -37,7 +50,6 @@ fn main() {
     if device.os.as_ref().unwrap() == "Junos OS" {
         let channel = junos_cmd_show_configuration(&session)
             .expect("Unable to open channel");
-        println!("{}", channel.exit_status().unwrap());
     }
 }
 
@@ -49,10 +61,10 @@ fn ssh2_session() -> Result<ssh2::Session, Error> {
         agent.list_identities().unwrap();
 
         for identity in agent.identities() {
-            let identity = identity.unwrap();
-            println!("SSH Agent Identity: {}", identity.comment());
-            let pubkey = identity.blob();
-            println!("Key: {:?}", pubkey);
+            let _identity = identity.unwrap();
+            //println!("SSH Agent Identity: {}", identity.comment());
+            let _pubkey = _identity.blob();
+            //println!("Key: {:?}", pubkey);
         }
     }
 
@@ -84,7 +96,7 @@ struct RouterConfig {
 }
 
 fn read_toml() -> Result<Config, Error> {
-    let mut current_dir = env::current_dir().unwrap();
+    let current_dir = env::current_dir().unwrap();
     let dir = current_dir.into_os_string().into_string().unwrap();
     let conf = "/config/Router.toml";
     let conf_path = format!("{}{}", dir, conf);
@@ -95,13 +107,12 @@ fn read_toml() -> Result<Config, Error> {
     Ok(toml::from_str::<Config>(&contents.to_string())?)
 }
 
-#[derive(StructOpt)]
+#[derive(Debug, StructOpt)]
 #[structopt(name = "mentos", about = "the fresh maker")]
 enum Mentos {
     #[structopt(name = "fetch")]
     Fetch {
-        #[structopt(short = "all")]
+        #[structopt(short = "a", long = "all")]
         all: bool,
-        input: Option<String>
     },
 }
