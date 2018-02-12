@@ -50,6 +50,10 @@ fn fetch(all: bool) {
     if device.os.as_ref().unwrap() == "Junos OS" {
         let channel = junos_cmd_show_configuration(&session)
             .expect("Unable to open channel");
+        let exit_status = channel.exit_status().unwrap();
+        if exit_status != 0 {
+            println!("Channel exit status: {}", exit_status);
+        }
     }
 }
 
