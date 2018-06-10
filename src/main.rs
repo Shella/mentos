@@ -19,7 +19,8 @@ fn main() {
     let mentos = Mentos::from_args();
     println!("{:?}", mentos);
     match mentos {
-        Mentos::Fetch { all, .. } => fetch(all)
+        Mentos::Fetch { all, .. } => fetch(all),
+        Mentos::Netconf { hello , .. } => netconf(hello)
     }
 }
 
@@ -57,6 +58,33 @@ fn fetch(all: bool) {
     }
 }
 
+fn netconf(hello: bool) {
+    let device = get_device_config();
+    let ip = device.ip.as_ref().unwrap();
+    let port = device.port.as_ref().unwrap();
+    let user = device.user.as_ref().unwrap();
+    let server = format!("{}:{}", ip, port);
+
+    let mut session = ssh2_session().expect("Unable to create new session");
+    println!("Connecting to server {}..", server);
+    let tcp = TcpStream::connect(server).unwrap();
+    session.handshake(&tcp).unwrap();
+    session.userauth_agent(user).unwrap();
+
+    assert!(session.authenticated());
+    let banner = session.banner().unwrap();
+    println!("Server Banner: {}", banner);
+
+    if device.os.as_ref().unwrap() == "Junos OS" {
+        let channel = junos_netconf_msg_hello(&session)
+            .expect("Unable to open channel");
+        let exit_status = channel.exit_status().unwrap();
+        if exit_status != 0 {
+            println!("Channel exit status: {}", exit_status);
+        }
+    }
+}
+
 fn ssh2_session() -> Result<ssh2::Session, Error> {
     let sess = Session::new().unwrap();
     {
@@ -65,10 +93,10 @@ fn ssh2_session() -> Result<ssh2::Session, Error> {
         agent.list_identities().unwrap();
 
         for identity in agent.identities() {
-            let _identity = identity.unwrap();
-            //println!("SSH Agent Identity: {}", identity.comment());
-            let _pubkey = _identity.blob();
-            //println!("Key: {:?}", pubkey);
+            let identity = identity.unwrap();
+            println!("SSH Agent Identity: {}", identity.comment());
+            let pubkey = identity.blob();
+            println!("Key: {:?}", pubkey);
         }
     }
 
@@ -78,6 +106,15 @@ fn ssh2_session() -> Result<ssh2::Session, Error> {
 fn junos_cmd_show_configuration(session: &Session) -> Result<ssh2::Channel, Error> {
     let mut channel = session.channel_session().unwrap();
     channel.exec("show configuration").unwrap();
+    let mut s = String::new();
+    channel.read_to_string(&mut s)?;
+    println!("{}", s);
+
+    Ok(channel)
+}
+
+fn junos_netconf_msg_hello(session: &Session) -> Result<ssh2::Channel, Error> {
+    let mut channel = session.channel_session().unwrap();
     let mut s = String::new();
     channel.read_to_string(&mut s)?;
     println!("{}", s);
@@ -118,5 +155,10 @@ enum Mentos {
     Fetch {
         #[structopt(short = "a", long = "all")]
         all: bool,
+    },
+    #[structopt(name = "netconf")]
+    Netconf {
+        #[structopt(short = "h", long = "hello")]
+        hello: bool,
     },
 }
