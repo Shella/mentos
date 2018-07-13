@@ -9,7 +9,8 @@ use ssh2::Session;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
-use std::io::Read;
+use std::io::BufReader;
+use std::io::{Read,Write};
 use std::net::TcpStream;
 use structopt::StructOpt;
 
@@ -65,6 +66,7 @@ fn netconf(hello: bool) {
     let user = device.user.as_ref().unwrap();
     let server = format!("{}:{}", ip, port);
 
+
     let mut session = ssh2_session().expect("Unable to create new session");
     println!("Connecting to server {}..", server);
     let tcp = TcpStream::connect(server).unwrap();
@@ -115,9 +117,17 @@ fn junos_cmd_show_configuration(session: &Session) -> Result<ssh2::Channel, Erro
 
 fn junos_netconf_msg_hello(session: &Session) -> Result<ssh2::Channel, Error> {
     let mut channel = session.channel_session().unwrap();
-    let mut s = String::new();
-    channel.read_to_string(&mut s)?;
-    println!("{}", s);
+    channel.shell().unwrap();
+    let mut buffer = vec![0u8;2056];
+    let mut n_bytes = channel.read(&mut buffer).unwrap();
+    println!("{:?}", String::from_utf8(buffer.clone()));
+    println!("{}", n_bytes);
+    loop {
+        channel.write(b"netconf\n").unwrap();
+        let n_bytes = channel.read(&mut buffer).unwrap();
+        println!("{:?}", String::from_utf8(buffer.clone()));
+        println!("{}", n_bytes);
+    }
 
     Ok(channel)
 }
