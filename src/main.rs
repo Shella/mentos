@@ -1,16 +1,17 @@
+extern crate bufstream;
 extern crate env_logger;
 extern crate failure;
 #[macro_use] extern crate serde_derive;
 extern crate ssh2;
 #[macro_use] extern crate structopt;
 extern crate toml;
+use bufstream::BufStream;
 use failure::Error;
 use ssh2::Session;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
-use std::io::BufReader;
-use std::io::{Read,Write};
+use std::io::{BufRead,Read,Write};
 use std::net::TcpStream;
 use structopt::StructOpt;
 
@@ -80,10 +81,11 @@ fn netconf(hello: bool) {
     if device.os.as_ref().unwrap() == "Junos OS" {
         let channel = junos_netconf_msg_hello(&session)
             .expect("Unable to open channel");
-        let exit_status = channel.exit_status().unwrap();
+        /*let exit_status = channel.exit_status().unwrap();
         if exit_status != 0 {
             println!("Channel exit status: {}", exit_status);
         }
+        */
     }
 }
 
@@ -115,21 +117,23 @@ fn junos_cmd_show_configuration(session: &Session) -> Result<ssh2::Channel, Erro
     Ok(channel)
 }
 
-fn junos_netconf_msg_hello(session: &Session) -> Result<ssh2::Channel, Error> {
+fn junos_netconf_msg_hello(session: &Session) -> Result<BufStream<ssh2::Channel>, Error> {
     let mut channel = session.channel_session().unwrap();
     channel.shell().unwrap();
-    let mut buffer = vec![0u8;2056];
-    let mut n_bytes = channel.read(&mut buffer).unwrap();
-    println!("{:?}", String::from_utf8(buffer.clone()));
-    println!("{}", n_bytes);
-    loop {
+    let mut buf = BufStream::new(channel);
+    {
+        let data = buf.fill_buf()?;
+        println!("{:?}", String::from_utf8(data.to_vec()));
+    }
+    /*loop {
         channel.write(b"netconf\n").unwrap();
-        let n_bytes = channel.read(&mut buffer).unwrap();
+        //let n_bytes = channel.read(&mut buffer).unwrap();
         println!("{:?}", String::from_utf8(buffer.clone()));
         println!("{}", n_bytes);
     }
+    */
 
-    Ok(channel)
+    Ok(buf)
 }
 
 #[derive(Debug, Deserialize)]
