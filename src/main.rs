@@ -121,17 +121,22 @@ fn junos_netconf_msg_hello(session: &Session) -> Result<BufStream<ssh2::Channel>
     let mut channel = session.channel_session().unwrap();
     channel.shell().unwrap();
     let mut buf = BufStream::new(channel);
-    {
-        let data = buf.fill_buf()?;
-        println!("{:?}", String::from_utf8(data.to_vec()));
+    let mut prompt = vec![];
+    buf.read_until(b' ', &mut prompt)?;
+    println!("{:?}", String::from_utf8(prompt));
+    println!("derp");
+    buf.write(b"netconf\n")?;
+    buf.flush()?;
+    let mut xml = vec![];
+    loop {
+        let length = {
+            let buffer = buf.fill_buf()?;
+            xml.extend_from_slice(buffer);
+            buffer.len()
+        };
+        buf.consume(length);
+        println!("{:?}", String::from_utf8(xml.clone()));
     }
-    /*loop {
-        channel.write(b"netconf\n").unwrap();
-        //let n_bytes = channel.read(&mut buffer).unwrap();
-        println!("{:?}", String::from_utf8(buffer.clone()));
-        println!("{}", n_bytes);
-    }
-    */
 
     Ok(buf)
 }
