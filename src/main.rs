@@ -135,9 +135,12 @@ fn junos_netconf_msg_hello(session: &Session) -> Result<BufStream<ssh2::Channel>
             buffer.len()
         };
         buf.consume(length);
-        println!("{:?}", String::from_utf8(xml.clone()));
+        if xml.windows(6).position(|window|window == b"]]>]]>").is_some() {
+            break;
+        }
     }
 
+    println!("{:?}", String::from_utf8(xml.clone()));
     Ok(buf)
 }
 
