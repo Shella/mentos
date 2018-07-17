@@ -1,12 +1,14 @@
 extern crate bufstream;
 extern crate env_logger;
 extern crate failure;
+extern crate quick_xml;
 #[macro_use] extern crate serde_derive;
 extern crate ssh2;
 #[macro_use] extern crate structopt;
 extern crate toml;
 use bufstream::BufStream;
 use failure::Error;
+use quick_xml::Reader;
 use ssh2::Session;
 use std::collections::HashMap;
 use std::env;
@@ -139,6 +141,15 @@ fn junos_netconf_msg_hello(session: &Session) -> Result<BufStream<ssh2::Channel>
             break;
         }
     }
+
+    let hello = r#"<hello xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+                    <capabilities>
+                    <capability>urn:ietf:params:netconf:base:1.0</capability>
+                    </capabilities>
+                </hello>"#;
+
+    let mut reader = Reader::from_str(hello);
+    reader.trim_text(true);
 
     println!("{:?}", String::from_utf8(xml.clone()));
     Ok(buf)
