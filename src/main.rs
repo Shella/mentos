@@ -2,9 +2,11 @@ extern crate bufstream;
 extern crate env_logger;
 extern crate failure;
 extern crate quick_xml;
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 extern crate ssh2;
-#[macro_use] extern crate structopt;
+#[macro_use]
+extern crate structopt;
 extern crate toml;
 use bufstream::BufStream;
 use failure::Error;
@@ -13,7 +15,7 @@ use ssh2::Session;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
-use std::io::{BufRead,Read,Write};
+use std::io::{BufRead, Read, Write};
 use std::net::TcpStream;
 use structopt::StructOpt;
 
@@ -24,7 +26,7 @@ fn main() {
     println!("{:?}", mentos);
     match mentos {
         Mentos::Fetch { all, .. } => fetch(all),
-        Mentos::Netconf { hello , .. } => netconf(hello)
+        Mentos::Netconf { hello, .. } => netconf(hello),
     }
 }
 
@@ -53,8 +55,7 @@ fn fetch(all: bool) {
     println!("Server Banner: {}", banner);
 
     if device.os.as_ref().unwrap() == "Junos OS" {
-        let channel = junos_cmd_show_configuration(&session)
-            .expect("Unable to open channel");
+        let channel = junos_cmd_show_configuration(&session).expect("Unable to open channel");
         let exit_status = channel.exit_status().unwrap();
         if exit_status != 0 {
             println!("Channel exit status: {}", exit_status);
@@ -69,7 +70,6 @@ fn netconf(hello: bool) {
     let user = device.user.as_ref().unwrap();
     let server = format!("{}:{}", ip, port);
 
-
     let mut session = ssh2_session().expect("Unable to create new session");
     println!("Connecting to server {}..", server);
     let tcp = TcpStream::connect(server).unwrap();
@@ -81,8 +81,7 @@ fn netconf(hello: bool) {
     println!("Server Banner: {}", banner);
 
     if device.os.as_ref().unwrap() == "Junos OS" {
-        let channel = junos_netconf_msg_hello(&session)
-            .expect("Unable to open channel");
+        let channel = junos_netconf_msg_hello(&session).expect("Unable to open channel");
         /*let exit_status = channel.exit_status().unwrap();
         if exit_status != 0 {
             println!("Channel exit status: {}", exit_status);
@@ -137,7 +136,11 @@ fn junos_netconf_msg_hello(session: &Session) -> Result<BufStream<ssh2::Channel>
             buffer.len()
         };
         buf.consume(length);
-        if xml.windows(6).position(|window|window == b"]]>]]>").is_some() {
+        if xml
+            .windows(6)
+            .position(|window| window == b"]]>]]>")
+            .is_some()
+        {
             break;
         }
     }
