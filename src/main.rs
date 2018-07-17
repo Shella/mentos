@@ -125,7 +125,6 @@ fn junos_netconf_msg_hello(session: &Session) -> Result<BufStream<ssh2::Channel>
     let mut prompt = vec![];
     buf.read_until(b' ', &mut prompt)?;
     println!("{:?}", String::from_utf8(prompt));
-    println!("derp");
     buf.write(b"netconf\n")?;
     buf.flush()?;
     let mut xml = vec![];
