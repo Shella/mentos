@@ -82,11 +82,6 @@ fn netconf(hello: bool) {
 
     if device.os.as_ref().unwrap() == "Junos OS" {
         let channel = junos_netconf_session(&session).expect("Unable to open channel");
-        /*let exit_status = channel.exit_status().unwrap();
-        if exit_status != 0 {
-            println!("Channel exit status: {}", exit_status);
-        }
-        */
     }
 }
 
@@ -124,16 +119,11 @@ fn junos_netconf_session(session: &Session) -> Result<BufStream<ssh2::Channel>, 
     let mut buf = BufStream::new(channel);
     let mut prompt = vec![];
     buf.read_until(b' ', &mut prompt)?;
-    println!("{:?}", String::from_utf8(prompt));
     buf.write(b"netconf\n")?;
     buf.flush()?;
-
     let mut xml = vec![];
     junos_netconf_send_hello(&mut buf).unwrap();
-    buf.flush()?;
     junos_netconf_get_config(&mut buf).unwrap();
-    buf.flush()?;
-
     loop {
         let length = {
             let buffer = buf.fill_buf()?;
@@ -146,7 +136,7 @@ fn junos_netconf_session(session: &Session) -> Result<BufStream<ssh2::Channel>, 
             .position(|window| window == b"]]>]]>")
             .is_some()
         {
-           break;
+            break;
         }
     }
 
@@ -161,12 +151,14 @@ fn junos_netconf_send_hello(buf: &mut BufStream<ssh2::Channel>) -> Result<(), Er
                     </capabilities>
                 </hello>]]>]]>"#;
     buf.write(hello.as_bytes())?;
+    buf.flush()?;
     Ok(())
 }
 
 fn junos_netconf_get_config(buf: &mut BufStream<ssh2::Channel>) -> Result<(), Error> {
     let get_config = r#"<rpc><get-configuration/></rpc>]]>]]>"#;
     buf.write(get_config.as_bytes())?;
+    buf.flush()?;
     Ok(())
 }
 
