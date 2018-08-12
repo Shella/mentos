@@ -113,7 +113,42 @@ fn junos_cmd_show_configuration(session: &Session) -> Result<ssh2::Channel, Erro
     Ok(channel)
 }
 
-fn junos_netconf_session(session: &Session) -> Result<BufStream<ssh2::Channel>, Error> {
+struct Connection<'sess> {
+    channel: BufStream<ssh2::Channel<'sess>>,
+}
+
+impl<'sess> Connection<'sess> {
+    pub fn new(channel: BufStream<ssh2::Channel>) -> Connection{
+        Connection{channel}
+    }
+
+    pub fn read(&mut self) -> Result<Vec<u8>, Error> {
+        let mut xml = vec![];
+        loop {
+            let length = {
+                let buffer = self.channel.fill_buf()?;
+                xml.extend_from_slice(buffer);
+                buffer.len()
+            };
+            self.channel.consume(length);
+            if xml
+                .windows(6)
+                .position(|window| window == b"]]>]]>")
+                .is_some()
+                {
+                   return Ok(xml)
+                }
+        }
+    }
+
+    pub fn write(&mut self, data: &[u8]) -> Result<usize, Error> {
+        let len = self.channel.write(data)?;
+        self.channel.flush()?;
+        Ok(len)
+    }
+}
+
+fn junos_netconf_session(session: &Session) -> Result<Connection, Error> {
     let mut channel = session.channel_session().unwrap();
     channel.shell().unwrap();
     let mut buf = BufStream::new(channel);
@@ -121,45 +156,29 @@ fn junos_netconf_session(session: &Session) -> Result<BufStream<ssh2::Channel>, 
     buf.read_until(b' ', &mut prompt)?;
     buf.write(b"netconf\n")?;
     buf.flush()?;
-    let mut xml = vec![];
-    junos_netconf_send_hello(&mut buf).unwrap();
-    junos_netconf_get_config(&mut buf).unwrap();
-    loop {
-        let length = {
-            let buffer = buf.fill_buf()?;
-            xml.extend_from_slice(buffer);
-            buffer.len()
-        };
-        buf.consume(length);
-        if xml
-            .windows(6)
-            .position(|window| window == b"]]>]]>")
-            .is_some()
-        {
-            break;
-        }
-    }
+    let mut conn = Connection::new(buf);
+    let hello_msg = conn.read()?;
+    println!("{:?}", &hello_msg);
+    junos_netconf_send_hello(&mut conn).unwrap();
+    junos_netconf_get_config(&mut conn).unwrap();
 
-    println!("{:?}", String::from_utf8(xml.clone()));
-    Ok(buf)
+    Ok(conn)
 }
 
-fn junos_netconf_send_hello(buf: &mut BufStream<ssh2::Channel>) -> Result<(), Error> {
+fn junos_netconf_send_hello(conn: &mut Connection) -> Result<(), Error> {
     let hello = r#"<hello xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
                     <capabilities>
                     <capability>urn:ietf:params:netconf:base:1.0</capability>
                     </capabilities>
                 </hello>]]>]]>"#;
-    buf.write(hello.as_bytes())?;
-    buf.flush()?;
+    conn.write(hello.as_bytes())?;
     Ok(())
 }
 
-fn junos_netconf_get_config(buf: &mut BufStream<ssh2::Channel>) -> Result<(), Error> {
+fn junos_netconf_get_config(conn: &mut Connection) -> Result<usize, Error> {
     let get_config = r#"<rpc><get-configuration/></rpc>]]>]]>"#;
-    buf.write(get_config.as_bytes())?;
-    buf.flush()?;
-    Ok(())
+    let config_usize = conn.write(get_config.as_bytes())?;
+    Ok(config_usize)
 }
 
 #[derive(Debug, Deserialize)]
