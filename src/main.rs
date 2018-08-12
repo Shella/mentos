@@ -10,7 +10,7 @@ extern crate structopt;
 extern crate toml;
 use bufstream::BufStream;
 use failure::Error;
-use quick_xml::Reader;
+use quick_xml::{Reader, Writer};
 use ssh2::Session;
 use std::collections::HashMap;
 use std::env;
@@ -81,7 +81,7 @@ fn netconf(hello: bool) {
     println!("Server Banner: {}", banner);
 
     if device.os.as_ref().unwrap() == "Junos OS" {
-        let channel = junos_netconf_msg_hello(&session).expect("Unable to open channel");
+        let channel = junos_netconf_session(&session).expect("Unable to open channel");
         /*let exit_status = channel.exit_status().unwrap();
         if exit_status != 0 {
             println!("Channel exit status: {}", exit_status);
@@ -118,7 +118,7 @@ fn junos_cmd_show_configuration(session: &Session) -> Result<ssh2::Channel, Erro
     Ok(channel)
 }
 
-fn junos_netconf_msg_hello(session: &Session) -> Result<BufStream<ssh2::Channel>, Error> {
+fn junos_netconf_session(session: &Session) -> Result<BufStream<ssh2::Channel>, Error> {
     let mut channel = session.channel_session().unwrap();
     channel.shell().unwrap();
     let mut buf = BufStream::new(channel);
@@ -127,7 +127,13 @@ fn junos_netconf_msg_hello(session: &Session) -> Result<BufStream<ssh2::Channel>
     println!("{:?}", String::from_utf8(prompt));
     buf.write(b"netconf\n")?;
     buf.flush()?;
+
     let mut xml = vec![];
+    junos_netconf_send_hello(&mut buf).unwrap();
+    buf.flush()?;
+    junos_netconf_get_config(&mut buf).unwrap();
+    buf.flush()?;
+
     loop {
         let length = {
             let buffer = buf.fill_buf()?;
@@ -140,21 +146,28 @@ fn junos_netconf_msg_hello(session: &Session) -> Result<BufStream<ssh2::Channel>
             .position(|window| window == b"]]>]]>")
             .is_some()
         {
-            break;
+           break;
         }
     }
 
+    println!("{:?}", String::from_utf8(xml.clone()));
+    Ok(buf)
+}
+
+fn junos_netconf_send_hello(buf: &mut BufStream<ssh2::Channel>) -> Result<(), Error> {
     let hello = r#"<hello xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
                     <capabilities>
                     <capability>urn:ietf:params:netconf:base:1.0</capability>
                     </capabilities>
-                </hello>"#;
+                </hello>]]>]]>"#;
+    buf.write(hello.as_bytes())?;
+    Ok(())
+}
 
-    let mut reader = Reader::from_str(hello);
-    reader.trim_text(true);
-
-    println!("{:?}", String::from_utf8(xml.clone()));
-    Ok(buf)
+fn junos_netconf_get_config(buf: &mut BufStream<ssh2::Channel>) -> Result<(), Error> {
+    let get_config = r#"<rpc><get-configuration/></rpc>]]>]]>"#;
+    buf.write(get_config.as_bytes())?;
+    Ok(())
 }
 
 #[derive(Debug, Deserialize)]
