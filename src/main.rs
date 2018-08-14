@@ -10,6 +10,7 @@ extern crate structopt;
 extern crate toml;
 use bufstream::BufStream;
 use failure::Error;
+use quick_xml::events::Event;
 use quick_xml::{Reader, Writer};
 use ssh2::Session;
 use std::collections::HashMap;
@@ -120,8 +121,8 @@ struct Connection<'sess> {
 }
 
 impl<'sess> Connection<'sess> {
-    pub fn new(channel: BufStream<ssh2::Channel>) -> Connection{
-        Connection{channel}
+    pub fn new(channel: BufStream<ssh2::Channel>) -> Connection {
+        Connection { channel }
     }
 
     pub fn read(&mut self) -> Result<Vec<u8>, Error> {
@@ -137,9 +138,9 @@ impl<'sess> Connection<'sess> {
                 .windows(6)
                 .position(|window| window == TERMINATOR)
                 .is_some()
-                {
-                   return Ok(xml)
-                }
+            {
+                return Ok(xml);
+            }
         }
     }
 
@@ -164,9 +165,9 @@ fn junos_netconf_session(session: &Session) -> Result<Connection, Error> {
     let hello = junos_netconf_send_hello(&mut conn).unwrap();
     println!("hello: {}", hello);
     let config = junos_netconf_get_config(&mut conn).unwrap();
+    parse_config(&config).unwrap();
     println!("get config: {:?}", String::from_utf8(config));
     junos_netconf_close_session(&mut conn).unwrap();
-
     Ok(conn)
 }
 
@@ -184,6 +185,31 @@ fn junos_netconf_get_config(conn: &mut Connection) -> Result<Vec<u8>, Error> {
     let get_config = r#"<rpc><get-configuration/></rpc>]]>]]>"#;
     let config_usize = conn.write(get_config.as_bytes())?;
     conn.read()
+}
+
+fn parse_config(config: &Vec<u8>) -> Result<(), Error> {
+    let config_string = String::from_utf8(config.to_vec())?;
+    let mut reader = Reader::from_str(&config_string);
+    reader.trim_text(true);
+    let mut count = 0;
+    let mut txt = vec![];
+    let mut buf = vec![];
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(Event::Start(ref e)) => match e.name() {
+                b"rpc-reply" => println!(
+                    "attributes values: {:?}",
+                    e.attributes().map(|a| a.unwrap().value).collect::<Vec<_>>()
+                ),
+                _ => (),
+            },
+            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap()),
+            Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+            Ok(Event::Eof) => (),
+            _ => (),
+        }
+        buf.clear()
+    }
 }
 
 fn junos_netconf_close_session(conn: &mut Connection) -> Result<usize, Error> {
