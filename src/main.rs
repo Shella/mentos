@@ -19,6 +19,8 @@ use std::io::{BufRead, Read, Write};
 use std::net::TcpStream;
 use structopt::StructOpt;
 
+const TERMINATOR: &[u8] = b"]]>]]>";
+
 fn main() {
     env_logger::init();
 
@@ -133,7 +135,7 @@ impl<'sess> Connection<'sess> {
             self.channel.consume(length);
             if xml
                 .windows(6)
-                .position(|window| window == b"]]>]]>")
+                .position(|window| window == TERMINATOR)
                 .is_some()
                 {
                    return Ok(xml)
@@ -158,27 +160,36 @@ fn junos_netconf_session(session: &Session) -> Result<Connection, Error> {
     buf.flush()?;
     let mut conn = Connection::new(buf);
     let hello_msg = conn.read()?;
-    println!("{:?}", &hello_msg);
-    junos_netconf_send_hello(&mut conn).unwrap();
-    junos_netconf_get_config(&mut conn).unwrap();
+    println!("{:?}", String::from_utf8(hello_msg));
+    let hello = junos_netconf_send_hello(&mut conn).unwrap();
+    println!("hello: {}", hello);
+    let config = junos_netconf_get_config(&mut conn).unwrap();
+    println!("get config: {:?}", String::from_utf8(config));
+    junos_netconf_close_session(&mut conn).unwrap();
 
     Ok(conn)
 }
 
-fn junos_netconf_send_hello(conn: &mut Connection) -> Result<(), Error> {
+fn junos_netconf_send_hello(conn: &mut Connection) -> Result<usize, Error> {
     let hello = r#"<hello xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
                     <capabilities>
                     <capability>urn:ietf:params:netconf:base:1.0</capability>
                     </capabilities>
                 </hello>]]>]]>"#;
-    conn.write(hello.as_bytes())?;
-    Ok(())
+    let hello_usize = conn.write(hello.as_bytes())?;
+    Ok(hello_usize)
 }
 
-fn junos_netconf_get_config(conn: &mut Connection) -> Result<usize, Error> {
+fn junos_netconf_get_config(conn: &mut Connection) -> Result<Vec<u8>, Error> {
     let get_config = r#"<rpc><get-configuration/></rpc>]]>]]>"#;
     let config_usize = conn.write(get_config.as_bytes())?;
-    Ok(config_usize)
+    conn.read()
+}
+
+fn junos_netconf_close_session(conn: &mut Connection) -> Result<usize, Error> {
+    let close_session = r#"<rpc><close-session/></rpc>]]>]]>"#;
+    let close_usize = conn.write(close_session.as_bytes())?;
+    Ok(close_usize)
 }
 
 #[derive(Debug, Deserialize)]
