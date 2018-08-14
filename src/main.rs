@@ -18,7 +18,6 @@ use std::env;
 use std::fs::File;
 use std::io::{BufRead, Read, Write};
 use std::net::TcpStream;
-use std::str::from_utf8;
 use structopt::StructOpt;
 
 const TERMINATOR: &[u8] = b"]]>]]>";
@@ -206,7 +205,7 @@ fn parse_config(config: &Vec<u8>) -> () {
             Ok(Event::Start(ref e)) => {
                 count += 1;
                 println!("elem names: {:?}", String::from_utf8(e.name().to_vec()));
-            },
+            }
             Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).expect("Error!")),
             Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
             Ok(Event::Eof) => break,
