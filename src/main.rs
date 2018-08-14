@@ -18,6 +18,7 @@ use std::env;
 use std::fs::File;
 use std::io::{BufRead, Read, Write};
 use std::net::TcpStream;
+use std::str::from_utf8;
 use structopt::StructOpt;
 
 const TERMINATOR: &[u8] = b"]]>]]>";
@@ -165,7 +166,7 @@ fn junos_netconf_session(session: &Session) -> Result<Connection, Error> {
     let hello = junos_netconf_send_hello(&mut conn).unwrap();
     println!("hello: {}", hello);
     let config = junos_netconf_get_config(&mut conn).unwrap();
-    parse_config(&config).unwrap();
+    parse_config(&config);
     println!("get config: {:?}", String::from_utf8(config));
     junos_netconf_close_session(&mut conn).unwrap();
     Ok(conn)
@@ -181,14 +182,20 @@ fn junos_netconf_send_hello(conn: &mut Connection) -> Result<usize, Error> {
     Ok(hello_usize)
 }
 
+fn junos_netconf_close_session(conn: &mut Connection) -> Result<usize, Error> {
+    let close_session = r#"<rpc><close-session/></rpc>]]>]]>"#;
+    let close_usize = conn.write(close_session.as_bytes())?;
+    Ok(close_usize)
+}
+
 fn junos_netconf_get_config(conn: &mut Connection) -> Result<Vec<u8>, Error> {
     let get_config = r#"<rpc><get-configuration/></rpc>]]>]]>"#;
-    let config_usize = conn.write(get_config.as_bytes())?;
+    conn.write(get_config.as_bytes())?;
     conn.read()
 }
 
-fn parse_config(config: &Vec<u8>) -> Result<(), Error> {
-    let config_string = String::from_utf8(config.to_vec())?;
+fn parse_config(config: &Vec<u8>) -> () {
+    let config_string = String::from_utf8(config.to_vec()).unwrap();
     let mut reader = Reader::from_str(&config_string);
     reader.trim_text(true);
     let mut count = 0;
@@ -196,26 +203,16 @@ fn parse_config(config: &Vec<u8>) -> Result<(), Error> {
     let mut buf = vec![];
     loop {
         match reader.read_event(&mut buf) {
-            Ok(Event::Start(ref e)) => match e.name() {
-                b"rpc-reply" => println!(
-                    "attributes values: {:?}",
-                    e.attributes().map(|a| a.unwrap().value).collect::<Vec<_>>()
-                ),
-                _ => (),
-            },
-            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap()),
+            Ok(Event::Start(ref e)) => count += 1,
+            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).expect("Error!")),
             Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
-            Ok(Event::Eof) => (),
+            Ok(Event::Eof) => break,
             _ => (),
         }
-        buf.clear()
+        buf.clear();
     }
-}
-
-fn junos_netconf_close_session(conn: &mut Connection) -> Result<usize, Error> {
-    let close_session = r#"<rpc><close-session/></rpc>]]>]]>"#;
-    let close_usize = conn.write(close_session.as_bytes())?;
-    Ok(close_usize)
+    println!("Found {} start events", count);
+    println!("Text events: {:?}", txt);
 }
 
 #[derive(Debug, Deserialize)]
