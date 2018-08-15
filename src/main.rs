@@ -13,7 +13,7 @@ use failure::Error;
 use quick_xml::events::Event;
 use quick_xml::{Reader, Writer};
 use ssh2::Session;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, Read, Write};
@@ -193,28 +193,66 @@ fn junos_netconf_get_config(conn: &mut Connection) -> Result<Vec<u8>, Error> {
     conn.read()
 }
 
+struct Parser<'a> {
+    reader: Reader<&'a [u8]>,
+}
+
+impl<'a> Parser<'a> {
+    pub fn new(reader: Reader<&'a [u8]>) -> Parser {
+       Parser { reader }
+    }
+
+    pub fn parse_node(&mut self, current_node: &mut Node) {
+        let mut count = 0;
+        let mut txt = vec![];
+        let mut buf = vec![];
+        loop {
+            match self.reader.read_event(&mut buf) {
+                Ok(Event::Start(ref e)) => {
+                    count += 1;
+                    println!("event start: {:?}", e);
+                    println!("elem names: {:?}", String::from_utf8(e.name().to_vec()));
+                }
+                Ok(Event::Text(e)) => {
+                    txt.push(e.unescape_and_decode(&self.reader).expect("Error!"));
+                    println!("event text: {:?}", e);
+                },
+                Err(e) => panic!("Error at position {}: {:?}", self.reader.buffer_position(), e),
+                Ok(Event::Eof) => {
+                    println!("event eof: {:?}", Event::Eof);
+                    break;
+
+                }
+                other => println!("other: {:?}", other)
+            }
+            buf.clear();
+        }
+        println!("Text events: {:?}", txt);
+    }
+
+}
+
+struct Node(BTreeMap<String, Node>);
+
+impl Node {
+    pub fn new() -> Node {
+        Node (BTreeMap::new())
+    }
+
+
+}
+
 fn parse_config(config: &Vec<u8>) -> () {
     let config_string = String::from_utf8(config.to_vec()).unwrap();
     let mut reader = Reader::from_str(&config_string);
     reader.trim_text(true);
-    let mut count = 0;
-    let mut txt = vec![];
-    let mut buf = vec![];
-    loop {
-        match reader.read_event(&mut buf) {
-            Ok(Event::Start(ref e)) => {
-                count += 1;
-                println!("elem names: {:?}", String::from_utf8(e.name().to_vec()));
-            }
-            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).expect("Error!")),
-            Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
-            Ok(Event::Eof) => break,
-            _ => (),
-        }
-        buf.clear();
-    }
-    println!("Found {} start events", count);
-    println!("Text events: {:?}", txt);
+
+    let mut root_node = Node::new();
+    let mut parser = Parser::new(reader);
+    parser.parse_node(&mut root_node);
+
+
+
 }
 
 #[derive(Debug, Deserialize)]
