@@ -1,5 +1,6 @@
 extern crate bufstream;
 extern crate env_logger;
+#[macro_use]
 extern crate failure;
 extern crate quick_xml;
 #[macro_use]
@@ -203,7 +204,7 @@ impl<'a> Parser<'a> {
         Parser { reader }
     }
 
-    pub fn parse(&mut self) -> Result<Node, ()> {
+    pub fn parse(&mut self) -> Result<Node, Error> {
         println!("+++ recursing!!!");
 
         let mut count = 0;
@@ -310,7 +311,7 @@ impl Node {
     }
 }
 
-fn parse_response<C: Into<Vec<u8>>>(into_config: C) -> Result<Node, ()> {
+fn parse_response<C: Into<Vec<u8>>>(into_config: C) -> Result<Node, Error> {
     let config = into_config.into();
 
     let config_len = config
@@ -320,7 +321,7 @@ fn parse_response<C: Into<Vec<u8>>>(into_config: C) -> Result<Node, ()> {
 
     let terminator = &config[config_len..];
     if terminator != TERMINATOR_WITH_NEWLINES {
-        panic!("unexpected terminator on message: {:?}", terminator);
+        bail!("unexpected terminator on message: {:?}", terminator);
     }
 
     let config_string = String::from_utf8(config[..config_len].to_vec()).unwrap();
