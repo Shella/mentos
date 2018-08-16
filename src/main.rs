@@ -167,7 +167,7 @@ fn junos_netconf_session(session: &Session) -> Result<Connection, Error> {
     println!("hello: {}", hello);
     let config = junos_netconf_get_config(&mut conn).unwrap();
     println!("get config reply: {:?}", String::from_utf8(config.clone()));
-    parse_config(&config);
+    parse_config(config);
     junos_netconf_close_session(&mut conn).unwrap();
     Ok(conn)
 }
@@ -232,11 +232,13 @@ impl<'a> Parser<'a> {
 
                     match self.reader.read_event(&mut buf2) {
                         Ok(Event::End(e)) => println!("text event end: {:?}", e),
-                        other => panic!("unexpected event at end of text: {:?}", e)
+                        other => panic!("unexpected event at end of text: {:?}", e),
                     }
 
                     buf2.clear();
-                    return Ok(Node::Value(e.unescape_and_decode(&self.reader).expect("Error!")));
+                    return Ok(Node::Value(
+                        e.unescape_and_decode(&self.reader).expect("Error!"),
+                    ));
                 }
                 Err(e) => panic!(
                     "Error at position {}: {:?}",
@@ -275,8 +277,14 @@ impl Node {
     }
 }
 
-fn parse_config(config: &Vec<u8>) -> () {
-    let config_len = config.len().checked_sub(TERMINATOR_WITH_NEWLINES.len()).unwrap();
+fn parse_config<C: Into<Vec<u8>>>(into_config: C) -> () {
+    let config = into_config.into();
+
+    let config_len = config
+        .len()
+        .checked_sub(TERMINATOR_WITH_NEWLINES.len())
+        .unwrap();
+
     let terminator = &config[config_len..];
     if terminator != TERMINATOR_WITH_NEWLINES {
         panic!("unexpected terminator on message: {:?}", terminator);
@@ -327,4 +335,298 @@ enum Mentos {
         #[structopt(short = "h", long = "hello")]
         hello: bool,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use quick_xml::Reader;
+    use super::*;
+
+    const EXAMPLE_XML: &str = r#"<rpc-reply xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:junos="http://xml.juniper.net/junos/12.3R9/junos">
+<configuration xmlns="http://xml.juniper.net/xnm/1.1/xnm" junos:changed-seconds="1423750418" junos:changed-localtime="2015-02-12 14:13:38 UTC">
+    <version>12.3R9.4</version>
+    <system>
+        <host-name>derp.switch</host-name>
+        <time-zone>UTC</time-zone>
+        <login>
+            <user>
+                <name>herp</name>
+                <uid>1234</uid>
+                <class>super-user</class>
+            </user>
+            <user>
+                <name>derp</name>
+                <uid>4321</uid>
+                <class>super-user</class>
+            </user>
+        </login>
+        <services>
+            <ssh>
+                <root-login>deny</root-login>
+                <protocol-version>v2</protocol-version>
+                <ciphers>aes256-ctr</ciphers>
+                <ciphers>aes192-ctr</ciphers>
+                <ciphers>aes128-ctr</ciphers>
+                <macs>hmac-sha2-512</macs>
+                <macs>hmac-sha2-256</macs>
+                <key-exchange>group-exchange-sha2</key-exchange>
+            </ssh>
+            <netconf>
+                <ssh>
+                </ssh>
+            </netconf>
+            <dhcp>
+                <traceoptions>
+                    <file>
+                        <filename>dhcp_logfile</filename>
+                    </file>
+                    <level>all</level>
+                    <flag>
+                        <name>all</name>
+                    </flag>
+                </traceoptions>
+            </dhcp>
+        </services>
+        <syslog>
+            <user>
+                <name>*</name>
+                <contents>
+                    <name>any</name>
+                    <emergency/>
+                </contents>
+            </user>
+            <file>
+                <name>messages</name>
+                <contents>
+                    <name>any</name>
+                    <notice/>
+                </contents>
+                <contents>
+                    <name>authorization</name>
+                    <info/>
+                </contents>
+            </file>
+            <file>
+                <name>interactive-commands</name>
+                <contents>
+                    <name>interactive-commands</name>
+                    <any/>
+                </contents>
+            </file>
+        </syslog>
+    </system>
+    <chassis>
+        <alarm>
+            <management-ethernet>
+                <link-down>ignore</link-down>
+            </management-ethernet>
+        </alarm>
+        <auto-image-upgrade/>
+    </chassis>
+    <interfaces>
+        <interface>
+            <name>ge-0/0/0</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>ge-0/0/1</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>ge-0/0/2</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>ge-0/0/3</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>ge-0/0/4</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>ge-0/0/5</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>ge-0/0/6</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>ge-0/0/7</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>ge-0/0/8</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>ge-0/0/9</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>ge-0/0/10</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>ge-0/0/11</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>ge-0/1/0</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>ge-0/1/1</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <ethernet-switching>
+                    </ethernet-switching>
+                </family>
+            </unit>
+        </interface>
+        <interface>
+            <name>vlan</name>
+            <unit>
+                <name>0</name>
+                <family>
+                    <inet>
+                        <address>
+                            <name>10.0.0.2/24</name>
+                        </address>
+                    </inet>
+                </family>
+            </unit>
+        </interface>
+    </interfaces>
+    <routing-options>
+        <static>
+            <route>
+                <name>0.0.0.0/0</name>
+                <next-hop>10.0.0.1</next-hop>
+            </route>
+        </static>
+    </routing-options>
+    <protocols>
+        <igmp-snooping>
+            <vlan>
+                <name>all</name>
+            </vlan>
+        </igmp-snooping>
+        <rstp>
+        </rstp>
+        <lldp>
+            <interface>
+                <name>all</name>
+            </interface>
+        </lldp>
+        <lldp-med>
+            <interface>
+                <name>all</name>
+            </interface>
+        </lldp-med>
+    </protocols>
+    <ethernet-switching-options>
+        <storm-control>
+            <interface>
+                <name>all</name>
+            </interface>
+        </storm-control>
+    </ethernet-switching-options>
+    <vlans>
+        <vlan>
+            <name>default</name>
+            <l3-interface>vlan.0</l3-interface>
+        </vlan>
+    </vlans>
+</configuration>
+</rpc-reply>
+]]>]]>
+"#;
+
+    #[test]
+    fn parse_response_test() {
+        let result = parse_config(EXAMPLE_XML);
+        panic!("parsed config: {:?}", result);
+    }
+
 }
