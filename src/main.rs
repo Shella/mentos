@@ -21,6 +21,7 @@ use std::net::TcpStream;
 use structopt::StructOpt;
 
 const TERMINATOR: &[u8] = b"]]>]]>";
+const TERMINATOR_WITH_NEWLINES: &[u8] = b"\n]]>]]>\n";
 
 fn main() {
     env_logger::init();
@@ -165,8 +166,8 @@ fn junos_netconf_session(session: &Session) -> Result<Connection, Error> {
     let hello = junos_netconf_send_hello(&mut conn).unwrap();
     println!("hello: {}", hello);
     let config = junos_netconf_get_config(&mut conn).unwrap();
+    println!("get config reply: {:?}", String::from_utf8(config.clone()));
     parse_config(&config);
-    println!("get config: {:?}", String::from_utf8(config));
     junos_netconf_close_session(&mut conn).unwrap();
     Ok(conn)
 }
@@ -199,60 +200,92 @@ struct Parser<'a> {
 
 impl<'a> Parser<'a> {
     pub fn new(reader: Reader<&'a [u8]>) -> Parser {
-       Parser { reader }
+        Parser { reader }
     }
 
-    pub fn parse_node(&mut self, current_node: &mut Node) {
+    pub fn parse(&mut self) -> Result<Node, ()> {
+        println!("+++ recursing!!!");
+
         let mut count = 0;
-        let mut txt = vec![];
         let mut buf = vec![];
+        let mut buf2 = vec![];
+        let mut current_node = Node::map();
+
         loop {
             match self.reader.read_event(&mut buf) {
                 Ok(Event::Start(ref e)) => {
                     count += 1;
-                    println!("event start: {:?}", e);
-                    println!("elem names: {:?}", String::from_utf8(e.name().to_vec()));
+                    let mut name = String::from_utf8(e.name().to_vec()).unwrap();
+                    println!("start: <{:?}>", name);
+                    current_node.insert(name, self.parse()?);
+                }
+                Ok(Event::End(ref e)) => {
+                    let mut name = String::from_utf8(e.name().to_vec()).unwrap();
+                    println!("end: </{:?}>", name);
+                    println!("--- returning!!!");
+                    return Ok(current_node);
                 }
                 Ok(Event::Text(e)) => {
-                    txt.push(e.unescape_and_decode(&self.reader).expect("Error!"));
                     println!("event text: {:?}", e);
-                },
-                Err(e) => panic!("Error at position {}: {:?}", self.reader.buffer_position(), e),
+                    // TODO: check that current_node is empty, and that the next event is Event::End
+                    println!("--- returning!!!");
+
+                    match self.reader.read_event(&mut buf2) {
+                        Ok(Event::End(e)) => println!("text event end: {:?}", e),
+                        other => panic!("unexpected event at end of text: {:?}", e)
+                    }
+
+                    buf2.clear();
+                    return Ok(Node::Value(e.unescape_and_decode(&self.reader).expect("Error!")));
+                }
+                Err(e) => panic!(
+                    "Error at position {}: {:?}",
+                    self.reader.buffer_position(),
+                    e
+                ),
                 Ok(Event::Eof) => {
                     println!("event eof: {:?}", Event::Eof);
-                    break;
-
+                    println!("--- returning!!!");
+                    return Ok(current_node);
                 }
-                other => println!("other: {:?}", other)
+                other => println!("event other: {:?}", other),
             }
             buf.clear();
         }
-        println!("Text events: {:?}", txt);
     }
-
 }
 
-struct Node(BTreeMap<String, Node>);
+#[derive(Debug)]
+pub enum Node {
+    Map(BTreeMap<String, Node>),
+    Value(String),
+}
 
 impl Node {
-    pub fn new() -> Node {
-        Node (BTreeMap::new())
+    pub fn map() -> Node {
+        Node::Map(BTreeMap::new())
     }
 
-
+    pub fn insert(&mut self, name: String, child: Node) {
+        if let Node::Map(ref mut map) = self {
+            map.insert(name, child);
+        } else {
+            panic!("wat");
+        }
+    }
 }
 
 fn parse_config(config: &Vec<u8>) -> () {
-    let config_string = String::from_utf8(config.to_vec()).unwrap();
+    let config_len = config.len().checked_sub(TERMINATOR_WITH_NEWLINES.len()).unwrap();
+    let terminator = &config[config_len..];
+    if terminator != TERMINATOR_WITH_NEWLINES {
+        panic!("unexpected terminator on message: {:?}", terminator);
+    }
+
+    let config_string = String::from_utf8(config[..config_len].to_vec()).unwrap();
     let mut reader = Reader::from_str(&config_string);
     reader.trim_text(true);
-
-    let mut root_node = Node::new();
-    let mut parser = Parser::new(reader);
-    parser.parse_node(&mut root_node);
-
-
-
+    println!("parsed config: {:?}", Parser::new(reader).parse());
 }
 
 #[derive(Debug, Deserialize)]
