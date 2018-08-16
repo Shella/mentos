@@ -217,7 +217,25 @@ impl<'a> Parser<'a> {
                     count += 1;
                     let mut name = String::from_utf8(e.name().to_vec()).unwrap();
                     println!("start: <{:?}>", name);
-                    current_node.insert(name, self.parse()?);
+                    let parsed_child = self.parse()?;
+
+                    match current_node {
+                        Node::Map(ref mut map) => {
+                            let node = match map.remove(&name) {
+                                Some(node) => Node::List(match node {
+                                    Node::List(mut l) => {
+                                        l.push(parsed_child);
+                                        l
+                                    }
+                                    other => vec![other, parsed_child],
+                                }),
+                                None => parsed_child,
+                            };
+
+                            map.insert(name, node);
+                        }
+                        other => panic!("wat: {:?}", other),
+                    }
                 }
                 Ok(Event::End(ref e)) => {
                     let mut name = String::from_utf8(e.name().to_vec()).unwrap();
@@ -259,6 +277,7 @@ impl<'a> Parser<'a> {
 
 #[derive(Debug)]
 pub enum Node {
+    List(Vec<Node>),
     Map(BTreeMap<String, Node>),
     Value(String),
 }
@@ -273,6 +292,13 @@ impl Node {
             map.insert(name, child);
         } else {
             panic!("wat");
+        }
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Node> {
+        match self {
+            Node::Map(ref map) => map.get(name),
+            _ => None,
         }
     }
 }
@@ -339,8 +365,8 @@ enum Mentos {
 
 #[cfg(test)]
 mod tests {
-    use quick_xml::Reader;
     use super::*;
+    use quick_xml::Reader;
 
     const EXAMPLE_XML: &str = r#"<rpc-reply xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:junos="http://xml.juniper.net/junos/12.3R9/junos">
 <configuration xmlns="http://xml.juniper.net/xnm/1.1/xnm" junos:changed-seconds="1423750418" junos:changed-localtime="2015-02-12 14:13:38 UTC">
