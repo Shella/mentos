@@ -167,7 +167,7 @@ fn junos_netconf_session(session: &Session) -> Result<Connection, Error> {
     println!("hello: {}", hello);
     let config = junos_netconf_get_config(&mut conn).unwrap();
     println!("get config reply: {:?}", String::from_utf8(config.clone()));
-    parse_config(config);
+    parse_response(config);
     junos_netconf_close_session(&mut conn).unwrap();
     Ok(conn)
 }
@@ -301,9 +301,16 @@ impl Node {
             _ => None,
         }
     }
+
+    pub fn value(&self) -> Option<&str> {
+        match self {
+            Node::Value(ref string) => Some(string),
+            _ => None,
+        }
+    }
 }
 
-fn parse_config<C: Into<Vec<u8>>>(into_config: C) -> () {
+fn parse_response<C: Into<Vec<u8>>>(into_config: C) -> Result<Node, ()> {
     let config = into_config.into();
 
     let config_len = config
@@ -319,7 +326,9 @@ fn parse_config<C: Into<Vec<u8>>>(into_config: C) -> () {
     let config_string = String::from_utf8(config[..config_len].to_vec()).unwrap();
     let mut reader = Reader::from_str(&config_string);
     reader.trim_text(true);
-    println!("parsed config: {:?}", Parser::new(reader).parse());
+    let result = Parser::new(reader).parse();
+    println!("parsed response: {:?}", result);
+    result
 }
 
 #[derive(Debug, Deserialize)]
@@ -651,8 +660,29 @@ mod tests {
 
     #[test]
     fn parse_response_test() {
-        let result = parse_config(EXAMPLE_XML);
-        panic!("parsed config: {:?}", result);
+        let result = parse_response(EXAMPLE_XML).unwrap();
+
+        if let Node::List(users) = result
+            .get("rpc-reply")
+            .unwrap()
+            .get("configuration")
+            .unwrap()
+            .get("system")
+            .unwrap()
+            .get("login")
+            .unwrap()
+            .get("user")
+            .unwrap()
+        {
+            let usernames: Vec<_> = users
+                .iter()
+                .map(|u| u.get("name").unwrap().value().unwrap())
+                .collect();
+
+            assert_eq!(usernames, ["herp", "derp"]);
+        } else {
+            panic!("users was not a list!")
+        }
     }
 
 }
