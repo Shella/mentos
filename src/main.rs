@@ -41,7 +41,7 @@ fn get_device_config() -> RouterConfig {
     device
 }
 
-fn fetch(all: bool) {
+fn fetch(_all: bool) {
     let device = get_device_config();
     let ip = device.ip.as_ref().unwrap();
     let port = device.port.as_ref().unwrap();
@@ -67,7 +67,7 @@ fn fetch(all: bool) {
     }
 }
 
-fn netconf(hello: bool) {
+fn netconf(_hello: bool) {
     let device = get_device_config();
     let ip = device.ip.as_ref().unwrap();
     let port = device.port.as_ref().unwrap();
@@ -85,7 +85,7 @@ fn netconf(hello: bool) {
     println!("Server Banner: {}", banner);
 
     if device.os.as_ref().unwrap() == "Junos OS" {
-        let channel = junos_netconf_session(&session).expect("Unable to open channel");
+        let _channel = junos_netconf_session(&session).expect("Unable to open channel");
     }
 }
 
@@ -250,7 +250,7 @@ impl<'a> Parser<'a> {
 
                     match self.reader.read_event(&mut buf2) {
                         Ok(Event::End(e)) => println!("text event end: {:?}", e),
-                        other => panic!("unexpected event at end of text: {:?}", e),
+                        _other => panic!("unexpected event at end of text: {:?}", e),
                     }
 
                     buf2.clear();
